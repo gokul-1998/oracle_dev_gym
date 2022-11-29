@@ -156,12 +156,13 @@ The `definition of the temporary table is permanent`. All users of the database 
 - Private Temporary Tables
     - Starting in Oracle Database 18c, you can create private temporary tables. These tables are only visible in your session. Other sessions can't see the table!
 
-To create one use "private temporary" between create and table. You must also prefix the table name with ora$ptt_:
-
+To create one use "private temporary" between create and table. You must also prefix the table name with `ora$ptt_`:
+```
 create private temporary table ora$ptt_toys (
   toy_name varchar2(100)
 );
-For both temporary table types, by default the `rows disappear when you end your transaction. You can change this to when your session ends with the "on commit" clause.
+```
+For both temporary table types, by default the `rows disappear when you end your transaction`. You can change this to when your session ends with the "on commit" clause.
 
 But either way, no one else can view the rows. Ensure you copy data you need to permanent tables before your session ends!
 
@@ -171,4 +172,148 @@ The column temporary in the *_tables views tell you which tables are temporary:
 select table_name, temporary
 from   user_tables
 where  table_name in ( 'TOYS_GTT', 'ORA$PTT_TOYS' );
+```
 Note that you can only see a row for the global temporary table. The database doesn't write private temporary tables to the data dictionary!
+
+- ## Partitioning Tables
+Partitioning logically splits up a table into smaller tables according to the partition column(s). 
+<br>So rows with the same partition key are stored in the same physical location.
+
+There are three types of partitioning available:
+
+    - Range
+    - List
+    - Hash
+To create a partitioned table, you need to:
+
+    - Choose a partition method
+    - State the partition columns
+    - Define the initial partitions
+The following statements create one table for each partitioning type:
+```
+create table toys_range (
+  toy_name varchar2(100)
+) partition by range ( toy_name ) (
+  partition p0 values less than ('b'),
+  partition p1 values less than ('c')
+);
+
+create table toys_list (
+  toy_name varchar2(100)
+) partition by list ( toy_name ) (
+  partition p0 values ('Sir Stripypants'),
+  partition p1 values ('Miss Snuggles')
+);
+
+create table toys_hash (
+  toy_name varchar2(100)
+) partition by hash ( toy_name ) partitions 4;
+```
+By default a partitioned table is `heap-organized`. But you can combine partitioning with some other properties. For example, you can have a partitioned `IOT`:
+```
+create table toys_part_iot (
+  toy_id   integer primary key,
+  toy_name varchar2(100)
+) organization index 
+  partition by hash ( toy_id ) partitions 4;
+``` 
+The database sets the partitioned column of *_tables to YES if the table is partitioned. You can view details about the partitions in the `*_tab_partitions` tables:
+```
+select table_name, partitioned 
+from   user_tables
+where  table_name in ( 'TOYS_HASH', 'TOYS_LIST', 'TOYS_RANGE', 'TOYS_PART_IOT' );
+```
+```
+select table_name, partition_name
+from   user_tab_partitions;
+```
+Note that partitioning is a separately licensable option of Oracle Database. Ensure you have this option before using it!
+df
+
+- ## Try It!
+Complete the following statement to create a hash-partitioned table. This should be partitioned on brick_id and have 8 partitions:
+```
+create table bricks_hash (
+  brick_id integer
+) partition by /*TODO*/;
+
+select table_name, partitioned 
+from   user_tables
+where  table_name = 'BRICKS_HASH';
+```
+The query should return the following row:
+```
+TABLE_NAME    PARTITIONED   
+BRICKS_HASH   YES   
+```
+- solution:
+```
+create table bricks_hash (
+  brick_id integer
+) partition by hash (brick_id) partitions 8;
+
+select table_name, partitioned 
+from   user_tables
+where  table_name = 'BRICKS_HASH';
+```
+- ## Table Clusters
+A table cluster can store rows from many tables in the same physical location. To do this, first you must create the cluster:
+```
+create cluster toy_cluster (
+  toy_name varchar2(100)
+);
+```
+Then place your tables in it using the cluster clause of create table:
+```
+create table toys_cluster_tab (
+  toy_name varchar2(100)
+) cluster toy_cluster ( toy_name );
+
+create table toy_owners_cluster_tab (
+  owner    varchar2(20),
+  toy_name varchar2(100)
+) cluster toy_cluster ( toy_name );
+```
+Rows that have the same value for toy_name in toys_clus_tab and toy_owners_clus_tab will be in the same place. This can make it faster to get a row for a given toy_name from both tables.
+
+You can view details of clusters by querying the *_clusters views. If a table is in a cluster, cluster_name of *_tables tells you which cluster it is in:
+```
+select cluster_name from user_clusters;
+
+select table_name, cluster_name
+from   user_tables
+where  table_name in ( 'TOYS_CLUSTER_TAB', 'TOY_OWNERS_CLUSTER_TAB' );
+```
+Note: Clustering tables is an advanced topic. They have some restrictions. So make sure you read up on these before you use them!
+
+- ## Dropping Tables
+You can remove existing tables with the drop table command. Just add the name of the table you want to destroy:
+```
+select table_name
+from   user_tables
+where  table_name = 'TOYS_HEAP';
+
+drop table toys_heap;
+
+select table_name
+from   user_tables
+where  table_name = 'TOYS_HEAP';
+```
+- ## Try It!
+Complete the following statement to drop the toys table:
+```
+drop table /*TODO*/ ;
+
+select table_name
+from   user_tables
+where  table_name = 'TOYS';
+```
+The query afterwards should return no rows.
+- solution
+```
+drop table toys ;
+
+select table_name
+from   user_tables
+where  table_name = 'TOYS';
+```
